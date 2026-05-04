@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background: transparent;
+    overflow: hidden;
+    font-family: Arial, Helvetica, Sans-Serif;
+  }
+  
+  .game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  
+  #gameCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center center;
+  }
+  
+  .overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    transition: opacity(0.3s) ease;
+  }
+  
+  /* menyembunyikan menu */
+  .hidden {
+    display: none !important;
+  }
+  
+  .btn {
+    padding: 12px 30px;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: white;
+    background-color: #e74c3c;
+    border: 2px solid #c0392b;
+    border-radius: 10px;
+    cursor: pointer;
+    /* menghilangkan efek default */
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .btn:active {
+    transform: scale(0.95);
+  }
+  
+  .tittle {
+    font-size: 2em;
+    color: white;
+    text-shadow: 2px 2px 0 #000;
+    margin-bottom: 1.2em;
+  }
+  </style>
+  <title>Bird - Game</title>
+</head>
+<body>
+  
+  <!-- Main Structure -->
+  <div class="game-container">
+    <canvas id="gameCanvas" width="320" height="480"></canvas>
+    
+    <div class="overlay" id="startMenu">
+      <h1 class="tittle">Flappy</h1>
+      <button class="btn" id="start">Play</button>
+    </div>
+    
+    <div class="overlay hidden" id="gameOver">
+      <h1 class="tittle">Game Over!</h1>
+      <button class="btn" id="restart">Restart</button>
+    </div>
+  </div>
+  
+  <script>
+  // ambil elemen
+  const startMenu = document.getElementById("startMenu");
+  const restartMenu = document.getElementById("gameOver");
+  const startBtn = document.getElementById("start");
+  const restartBtn = document.getElementById("restart");
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext('2d');
+  
+  //load aset gambar
+  const birdImg = new Image();
+  birdImg.src = 'Bird.png';
+  const pipeImg = new Image();
+  pipeImg.src = 'Pipe.png';
+  const bgImg = new Image();
+  bgImg.src = 'Background.jpg';
+  
+  // oop burung
+  class Bird {
+    constructor() {
+      this.x = 50;
+      this.y = canvas.height / 2; // Tengah Tengah
+      this.width = 30;
+      this.height = 30;
+      
+      // Fisika
+      this.velocity = 0; // kecepatan saat ini
+      this.gravity = 0.1; // kecepatan jatuh
+      this.jumpStrength = -3; // kekuatan lompat
+      // y negatif = keatas
+    }
+      
+      // METHOD
+    update() {
+      // kecepatan jatuh yg terus bertambah
+      this.velocity += this.gravity;
+      //posisi Y berubah sesuai kecepatan
+      this.y += this.velocity;
+      //batas bawah
+      if (this.y + this.height >= canvas.height) {
+          this.y = canvas.height - this.height; 
+          //tahan dilantai bawah
+          this.velocity = 0; // berhenti
+        }
+        
+      //batas atas
+      if (this.y <= 0) {
+        this.y = 0;
+        this.velocity = 0;
+      }
+    }
+        
+    // render visual
+    draw(ctx) {
+      ctx.drawImage(birdImg, this.x, this.y, this.width, this.height);
+    }
+        
+    // method lompat
+    jump() {
+      this.velocity = this.jumpStrength; //atas
+    }
+  }
+  
+  class Pipe {
+    constructor() {
+      this.x = canvas.width; // Keluar dari kanan
+      this.width = 50; // lebar standar
+      this.speed = 1; // kecepatan pipa
+      this.gap = 160; // ruang bagi burung
+      
+      // rumus tinggi acak
+      this.topHeight = Math.random() * (canvas.height - this.gap - 100) + 50;
+      // titik awal pipa bawah
+      this.bottomY = this.topHeight + this.gap;
+      
+      // cek skor
+      this.passed = false;
+    }
+    
+    // METHOD
+    update() {
+      this.x -= this.speed;
+    }
+    // draw
+    draw(ctx) {
+      // pipa bawah
+      const bottomHeight = canvas.height - this.bottomY;
+      ctx.drawImage(pipeImg, this.x, this.bottomY, this.width, bottomHeight);
+      // pipa atas
+      ctx.save(); // simpan pipe normal
+      // pindahkan titik pipa ke atas
+      ctx.translate(this.x + this.width / 2, this.topHeight / 2);
+      // putar pipe
+      ctx.rotate(Math.PI);
+      
+      ctx.drawImage(pipeImg, -this.width / 2, -this.topHeight / 2, this.width, this.topHeight);
+      
+      ctx.restore(); // agar burung tidak putar
+    }
+  }
+  
+  // intialize
+  const bird = new Bird();
+  let pipes = []; // tempat penyimpanan pipa;
+  let frames = 0; // penghitung frame pipa baru
+  let scores = 0; // score awal
+  let gameStatus = 'menu';
+  let countdownValue = 3;
+  
+  // fungis game loop
+  function animate() {
+    // 1. Bersihkan layar dan gambar background (Selalu tampil)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+    
+    // 2. LOGIKA PERGERAKAN (Jalan HANYA saat playing)
+    if (gameStatus === 'playing') {
+    
+      // update burung
+      bird.update();
+    
+      // memunculkan pipa baru
+      if (frames % 150 === 0) {
+        pipes.push(new Pipe());
+      }
+      
+      // looping pipa
+      for(let i = 0; i < pipes.length; i++) {
+        let p = pipes[i]; // INI WAJIB ADA AGAR 'p' DIKENALI
+        
+        p.update();
+      
+        // logika tabrakan
+        let hitTopPipe = (bird.x < p.x + p.width) && (bird.x + bird.width > p.x) && (bird.y < p.topHeight);
+        let hitBottomPipe = (bird.x < p.x + p.width) && (bird.x + bird.width > p.x) && (bird.y + bird.height > p.bottomY);
+      
+        if(hitTopPipe || hitBottomPipe || bird.y + bird.height >= canvas.height) {
+          gameStatus = 'gameover'; // ubah status
+          restartMenu.classList.remove('hidden');
+        }
+      
+        //logika skor
+        if(p.x + p.width < bird.x && !p.passed) {
+          scores++;
+          p.passed = true;
+        }
+      
+        // hapus pipa yg sudah lewat
+        if (p.x + p.width < 0) {
+          pipes.splice(i, 1); // hapus pipa array
+          i--; // sesuaikan index
+        }
+      }
+      
+      frames++; // Pindahkan hitung frame ke sini agar hanya bertambah saat main
+    }
+    
+    // 3. GAMBAR PIPA (Hanya tampil saat main atau mati)
+    if (gameStatus === 'playing' || gameStatus === 'gameover') {
+      for(let i = 0; i < pipes.length; i++) {
+        pipes[i].draw(ctx);
+      }
+    }
+  
+    // 4. GAMBAR BURUNG (Selalu tampil di menu, hitung mundur, dan main)
+    bird.draw(ctx);
+  
+    // 5. GAMBAR SKOR (Hanya tampil saat main atau mati)
+    if (gameStatus === 'playing' || gameStatus === 'gameover') {
+      ctx.fillStyle = 'white';
+      ctx.font = 'bold 50px Arial';
+      ctx.textAlign = 'center';
+      
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'black';
+      ctx.fillText(scores, canvas.width / 2, 60);
+      ctx.strokeText(scores, canvas.width / 2, 60);
+    }
+  
+    // 6. GAMBAR HITUNG MUNDUR (Hanya tampil saat delay sebelum main)
+    if (gameStatus === 'countdown') {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = "white";
+      ctx.font = "bold 80px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(countdownValue, canvas.width / 2, canvas.height / 2);
+    }
+    
+    // panggil fungsi berulang (60FPS)
+    requestAnimationFrame(animate);
+  }
+  
+  
+  function resetGame() {
+    bird.y = canvas.height / 2;
+    bird.velocity = 0;
+    pipes = [];
+    frames = 0;
+    scores = 0;
+  }
+  
+  function drawCount() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    bird.draw(ctx);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // gambar tengah layar
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 60px Arial';
+    ctx.textAlign = "center";
+    ctx.fillText(countdownValue, canvas.width / 2, canvas.height / 2 + 20);
+  }
+  
+  function delay() {
+    gameStatus = "countdown";
+    countdownValue = 3;
+    
+    drawCount();
+    
+    const timer = setInterval(() => {
+      countdownValue--;
+      if(countdownValue > 0) {
+        drawCount();
+      }else {
+        clearInterval(timer);
+        gameStatus = "playing";
+      }
+    }, 1000)
+  }
+  
+  // Game start
+  startBtn.addEventListener('click', () => {
+    startMenu.classList.add('hidden');
+    // fungsi jalankan game
+    resetGame();
+    delay();
+  });
+  
+  restartBtn.addEventListener('click', () => {
+    restartMenu.classList.add('hidden');
+    resetGame();
+    delay();
+  })
+  
+  // Tombol Spasi untuk lompat
+  window.addEventListener('keydown', (event) => {
+    if (event.code === 'Space' && gameStatus === 'playing') {
+      bird.jump();
+    }
+  });
+  
+  // Klik layar untuk lompat
+  canvas.addEventListener('mousedown', () => {
+    if (gameStatus === 'playing') {
+      bird.jump();
+    }
+  });
+  
+  animate();
+  </script>
+  
+</body>
+</html>
