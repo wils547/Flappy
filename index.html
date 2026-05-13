@@ -16,15 +16,16 @@
     justify-content: center;
     align-items: center;
     height: 100vh;
-    background: transparent;
+    background: #ffff;
     overflow: hidden;
     font-family: Arial, Helvetica, Sans-Serif;
   }
   
   .game-container {
     position: relative;
-    width: 100vw;
+    aspect-ratio: 9 / 16;
     height: 100vh;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
   }
   
   #gameCanvas {
@@ -126,7 +127,7 @@
       
       // Fisika
       this.velocity = 0; // kecepatan saat ini
-      this.gravity = 0.1; // kecepatan jatuh
+      this.gravity = 0.15; // kecepatan jatuh
       this.jumpStrength = -3; // kekuatan lompat
       // y negatif = keatas
     }
