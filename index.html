@@ -116,6 +116,8 @@
   pipeImg.src = 'Pipe.png';
   const bgImg = new Image();
   bgImg.src = 'Background.jpg';
+  const soundScore = new Audio('Pass.mp3');
+  const soundFail = new Audio('Fahh.mp3');
   
   // oop burung
   class Bird {
@@ -127,8 +129,8 @@
       
       // Fisika
       this.velocity = 0; // kecepatan saat ini
-      this.gravity = 0.1; // kecepatan jatuh
-      this.jumpStrength = -3; // kekuatan lompat
+      this.gravity = 0.15; // kecepatan jatuh
+      this.jumpStrength = -2.9; // kekuatan lompat
       // y negatif = keatas
     }
       
@@ -237,14 +239,23 @@
         let hitBottomPipe = (bird.x < p.x + p.width) && (bird.x + bird.width > p.x) && (bird.y + bird.height > p.bottomY);
       
         if(hitTopPipe || hitBottomPipe || bird.y + bird.height >= canvas.height) {
-          gameStatus = 'gameover'; // ubah status
-          restartMenu.classList.remove('hidden');
+          // sound
+          if(gameStatus !== 'gameover') {
+            soundFail.play()
+            gameStatus = 'gameover'; // ubah status
+            
+            setTimeout(() => {
+              restartMenu.classList.remove('hidden');
+            }, 600);
+          };
         }
       
         //logika skor
         if(p.x + p.width < bird.x && !p.passed) {
           scores++;
           p.passed = true;
+          soundScore.currentTime = 0; // Reset
+          soundScore.play(); // Play sound
         }
       
         // hapus pipa yg sudah lewat
